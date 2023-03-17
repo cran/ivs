@@ -436,7 +436,8 @@ iv_locate_overlaps <- function(needles,
                                missing = "equals",
                                no_match = NA_integer_,
                                remaining = "drop",
-                               multiple = "all") {
+                               multiple = "all",
+                               relationship = "none") {
   check_dots_empty0(...)
 
   args <- vec_cast_common(needles = needles, haystack = haystack)
@@ -457,7 +458,9 @@ iv_locate_overlaps <- function(needles,
     incomplete = incomplete,
     no_match = no_match,
     remaining = remaining,
-    multiple = multiple
+    multiple = multiple,
+    relationship = relationship,
+    error_call = current_env()
   )
 }
 
@@ -507,17 +510,30 @@ iv_pairwise_overlaps <- function(x,
   iv_detect_pairwise_impl(x, y, type, iv_prepare_overlaps)
 }
 
-iv_prepare_overlaps <- function(needles, haystack, type) {
-  type <- arg_match0(type, c("any", "equals", "contains", "within", "starts", "ends"))
+iv_prepare_overlaps <- function(needles,
+                                haystack,
+                                type,
+                                ...,
+                                error_call = caller_env()) {
+  check_dots_empty0(...)
 
-  needles_proxy <- iv_proxy(needles)
-  haystack_proxy <- iv_proxy(haystack)
+  type <- arg_match0(
+    arg = type,
+    values = c("any", "equals", "contains", "within", "starts", "ends"),
+    error_call = error_call
+  )
 
-  needles_start <- field_start(needles_proxy)
-  haystack_start <- field_start(haystack_proxy)
+  needles <- iv_proxy(needles)
+  check_iv(needles, call = error_call)
 
-  needles_end <- field_end(needles_proxy)
-  haystack_end <- field_end(haystack_proxy)
+  haystack <- iv_proxy(haystack)
+  check_iv(haystack, call = error_call)
+
+  needles_start <- field_start(needles)
+  haystack_start <- field_start(haystack)
+
+  needles_end <- field_end(needles)
+  haystack_end <- field_end(haystack)
 
   if (type == "any") {
     needles <- data_frame(a = needles_start, b = needles_end)
@@ -569,7 +585,8 @@ iv_locate_precedes <- function(needles,
                                missing = "equals",
                                no_match = NA_integer_,
                                remaining = "drop",
-                               multiple = "all") {
+                               multiple = "all",
+                               relationship = "none") {
   check_dots_empty0(...)
 
   iv_locate_positional(
@@ -580,7 +597,8 @@ iv_locate_precedes <- function(needles,
     missing = missing,
     no_match = no_match,
     remaining = remaining,
-    multiple = multiple
+    multiple = multiple,
+    relationship = relationship
   )
 }
 
@@ -593,7 +611,8 @@ iv_locate_follows <- function(needles,
                               missing = "equals",
                               no_match = NA_integer_,
                               remaining = "drop",
-                              multiple = "all") {
+                              multiple = "all",
+                              relationship = "none") {
   check_dots_empty0(...)
 
   iv_locate_positional(
@@ -604,7 +623,8 @@ iv_locate_follows <- function(needles,
     missing = missing,
     no_match = no_match,
     remaining = remaining,
-    multiple = multiple
+    multiple = multiple,
+    relationship = relationship
   )
 }
 
@@ -615,15 +635,17 @@ iv_locate_positional <- function(needles,
                                  missing,
                                  no_match,
                                  remaining,
-                                 multiple) {
-  args <- vec_cast_common(needles = needles, haystack = haystack)
+                                 multiple,
+                                 relationship,
+                                 ...,
+                                 error_call = caller_env()) {
+  check_dots_empty0(...)
+
+  args <- vec_cast_common(needles = needles, haystack = haystack, .call = error_call)
   needles <- args[[1L]]
   haystack <- args[[2L]]
 
-  needles <- iv_proxy(needles)
-  haystack <- iv_proxy(haystack)
-
-  args <- iv_prepare_positional(needles, haystack, type)
+  args <- iv_prepare_positional(needles, haystack, type, error_call = error_call)
   needles <- args$needles
   haystack <- args$haystack
   condition <- args$condition
@@ -633,7 +655,7 @@ iv_locate_positional <- function(needles,
   incomplete <- check_locate_missing(missing, no_match)
 
   if (!is_bool(closest)) {
-    abort("`closest` must be a single `TRUE` or `FALSE`.")
+    abort("`closest` must be a single `TRUE` or `FALSE`.", call = error_call)
   }
 
   filter <- "none"
@@ -656,7 +678,9 @@ iv_locate_positional <- function(needles,
     incomplete = incomplete,
     no_match = no_match,
     remaining = remaining,
-    multiple = multiple
+    multiple = multiple,
+    relationship = relationship,
+    error_call = error_call
   )
 }
 
@@ -707,7 +731,7 @@ iv_count_positional <- function(needles,
                                 missing,
                                 no_match,
                                 ...,
-                                call = caller_env()) {
+                                error_call = caller_env()) {
   if (type == "precedes") {
     iv_locate_fn <- iv_locate_precedes
   } else if (type == "follows") {
@@ -716,8 +740,8 @@ iv_count_positional <- function(needles,
     abort("Unknown `type`.", .internal = TRUE)
   }
 
-  missing <- check_count_missing(missing, call = call)
-  no_match <- check_count_no_match(no_match, call = call)
+  missing <- check_count_missing(missing, call = error_call)
+  no_match <- check_count_no_match(no_match, call = error_call)
 
   locations <- iv_locate_fn(
     needles = needles,
@@ -765,11 +789,23 @@ iv_follows <- function(needles,
 iv_detect_positional <- function(needles,
                                  haystack,
                                  type,
-                                 missing) {
+                                 missing,
+                                 ...,
+                                 error_call = caller_env()) {
+  check_dots_empty0(...)
+
   # In the case of `equals`, missing values will never match,
   # so we force a `0L` which results in `FALSE` for missings.
-  incomplete <- check_detect_missing(missing, 0L)
-  iv_detect_impl(needles, haystack, type, incomplete, iv_prepare_positional)
+  incomplete <- check_detect_missing(missing, 0L, call = error_call)
+
+  iv_detect_impl(
+    needles = needles,
+    haystack = haystack,
+    type = type,
+    incomplete = incomplete,
+    iv_prepare_impl = iv_prepare_positional,
+    error_call = error_call
+  )
 }
 
 #' @rdname relation-detect-pairwise
@@ -794,20 +830,39 @@ iv_pairwise_follows <- function(x, y) {
 
 iv_detect_pairwise_positional <- function(x,
                                           y,
-                                          type) {
-  iv_detect_pairwise_impl(x, y, type, iv_prepare_positional)
+                                          type,
+                                          ...,
+                                          error_call = caller_env()) {
+  check_dots_empty0(...)
+
+  iv_detect_pairwise_impl(
+    x = x,
+    y = y,
+    type = type,
+    iv_prepare_impl = iv_prepare_positional,
+    error_call = error_call
+  )
 }
 
 
-iv_prepare_positional <- function(needles, haystack, type) {
-  needles_proxy <- iv_proxy(needles)
-  haystack_proxy <- iv_proxy(haystack)
+iv_prepare_positional <- function(needles,
+                                  haystack,
+                                  type,
+                                  ...,
+                                  error_call = caller_env()) {
+  check_dots_empty0(...)
 
-  needles_start <- field_start(needles_proxy)
-  haystack_start <- field_start(haystack_proxy)
+  needles <- iv_proxy(needles)
+  check_iv(needles, call = error_call)
 
-  needles_end <- field_end(needles_proxy)
-  haystack_end <- field_end(haystack_proxy)
+  haystack <- iv_proxy(haystack)
+  check_iv(haystack, call = error_call)
+
+  needles_start <- field_start(needles)
+  haystack_start <- field_start(haystack)
+
+  needles_end <- field_end(needles)
+  haystack_end <- field_end(haystack)
 
   if (type == "precedes") {
     needles <- data_frame(a = needles_end)
@@ -1059,7 +1114,8 @@ iv_locate_relates <- function(needles,
                               missing = "equals",
                               no_match = NA_integer_,
                               remaining = "drop",
-                              multiple = "all") {
+                              multiple = "all",
+                              relationship = "none") {
   check_dots_empty0(...)
 
   args <- vec_cast_common(needles = needles, haystack = haystack)
@@ -1081,7 +1137,9 @@ iv_locate_relates <- function(needles,
     incomplete = incomplete,
     no_match = no_match,
     remaining = remaining,
-    multiple = multiple
+    multiple = multiple,
+    relationship = relationship,
+    error_call = current_env()
   )
 }
 
@@ -1297,10 +1355,16 @@ iv_pairwise_relates <- function(x, y, ..., type) {
   iv_detect_pairwise_impl(x, y, type, iv_prepare_relation)
 }
 
-iv_prepare_relation <- function(needles, haystack, type) {
+iv_prepare_relation <- function(needles,
+                                haystack,
+                                type,
+                                ...,
+                                error_call = caller_env()) {
+  check_dots_empty0(...)
+
   type <- arg_match0(
-    type,
-    c(
+    arg = type,
+    values = c(
       "precedes",
       "preceded-by",
       "meets",
@@ -1314,17 +1378,21 @@ iv_prepare_relation <- function(needles, haystack, type) {
       "during",
       "contains",
       "equals"
-    )
+    ),
+    error_call = error_call
   )
 
-  needles_proxy <- iv_proxy(needles)
-  haystack_proxy <- iv_proxy(haystack)
+  needles <- iv_proxy(needles)
+  check_iv(needles, call = error_call)
 
-  needles_start <- field_start(needles_proxy)
-  haystack_start <- field_start(haystack_proxy)
+  haystack <- iv_proxy(haystack)
+  check_iv(haystack, call = error_call)
 
-  needles_end <- field_end(needles_proxy)
-  haystack_end <- field_end(haystack_proxy)
+  needles_start <- field_start(needles)
+  haystack_start <- field_start(haystack)
+
+  needles_end <- field_end(needles)
+  haystack_end <- field_end(haystack)
 
   if (type == "precedes") {
     needles <- data_frame(a = needles_end)
@@ -1440,14 +1508,14 @@ iv_detect_impl <- function(needles,
                            incomplete,
                            iv_prepare_impl,
                            ...,
-                           call = caller_env()) {
+                           error_call = caller_env()) {
   check_dots_empty0(...)
 
-  args <- vec_cast_common(needles = needles, haystack = haystack)
+  args <- vec_cast_common(needles = needles, haystack = haystack, .call = error_call)
   needles <- args[[1L]]
   haystack <- args[[2L]]
 
-  args <- iv_prepare_impl(needles, haystack, type)
+  args <- iv_prepare_impl(needles, haystack, type, error_call = error_call)
   needles <- args$needles
   haystack <- args$haystack
   condition <- args$condition
@@ -1458,7 +1526,8 @@ iv_detect_impl <- function(needles,
     condition = condition,
     incomplete = incomplete,
     no_match = 0L,
-    multiple = "any"
+    multiple = "any",
+    error_call = error_call
   )
 
   # 0L -> FALSE
@@ -1470,7 +1539,12 @@ iv_detect_impl <- function(needles,
 }
 
 # Returns an `incomplete` argument value
-check_detect_missing <- function(missing, equals) {
+check_detect_missing <- function(missing,
+                                 equals,
+                                 ...,
+                                 call = caller_env()) {
+  check_dots_empty0(...)
+
   if (identical(missing, "equals")) {
     equals
   } else if (identical(missing, "error")) {
@@ -1482,7 +1556,7 @@ check_detect_missing <- function(missing, equals) {
   } else if (identical(missing, NA)) {
     NA_integer_
   } else {
-    abort('`missing` must be "equals", "error", or a single logical value.')
+    abort('`missing` must be "equals", "error", or a single logical value.', call = call)
   }
 }
 
@@ -1493,16 +1567,16 @@ iv_detect_pairwise_impl <- function(x,
                                     type,
                                     iv_prepare_impl,
                                     ...,
-                                    call = caller_env()) {
+                                    error_call = caller_env()) {
   check_dots_empty0(...)
 
   args <- list(x = x, y = y)
-  args <- vec_cast_common(!!!args, .call = call)
-  args <- vec_recycle_common(!!!args, .call = call)
+  args <- vec_cast_common(!!!args, .call = error_call)
+  args <- vec_recycle_common(!!!args, .call = error_call)
   x <- args[[1L]]
   y <- args[[2L]]
 
-  args <- iv_prepare_impl(x, y, type)
+  args <- iv_prepare_impl(x, y, type, error_call = error_call)
   # https://github.com/r-lib/rlang/issues/1346
   args <- map(args, unname)
   args <- transpose(args)

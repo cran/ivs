@@ -212,21 +212,18 @@ costs
 
 ## -----------------------------------------------------------------------------
 costs %>%
-  group_by(user) %>%
-  summarise(range = iv_groups(range), .groups = "drop")
+  reframe(range = iv_groups(range), .by = user)
 
 ## -----------------------------------------------------------------------------
 costs2 <- costs %>%
-  group_by(user) %>%
-  mutate(range = iv_identify_group(range))
+  mutate(range = iv_identify_group(range), .by = user)
 
 # `range` has been updated with the corresponding group
 costs2
 
 # So now we can group on that to summarise the cost
 costs2 %>%
-  group_by(range, .add = TRUE) %>%
-  summarise(cost = sum(cost), .groups = "drop")
+  summarise(cost = sum(cost), .by = c(user, range))
 
 ## -----------------------------------------------------------------------------
 x <- iv_pairs(c(1, 5), c(5, 7), c(9, 11), c(10, 13), c(12, 13))
@@ -279,17 +276,16 @@ guests2
 
 ## -----------------------------------------------------------------------------
 guests2 %>%
-  group_by(iv) %>%
-  summarise(n = n(), who = list(name), .groups = "drop")
+  summarise(n = n(), who = list(name), .by = iv)
 
 ## -----------------------------------------------------------------------------
 x <- iv_pairs(c(1, 3), c(2, 5), c(10, 12), c(13, 15))
 x
 
-iv_complement(x)
+iv_set_complement(x)
 
 ## -----------------------------------------------------------------------------
-iv_complement(x, lower = 0, upper = Inf)
+iv_set_complement(x, lower = 0, upper = Inf)
 
 ## -----------------------------------------------------------------------------
 y <- iv_pairs(c(-5, 0), c(1, 4), c(8, 10), c(15, 16))
@@ -297,13 +293,13 @@ y <- iv_pairs(c(-5, 0), c(1, 4), c(8, 10), c(15, 16))
 x
 y
 
-iv_union(x, y)
+iv_set_union(x, y)
 
 ## -----------------------------------------------------------------------------
-iv_intersect(x, y)
+iv_set_intersect(x, y)
 
 ## -----------------------------------------------------------------------------
-iv_difference(x, y)
+iv_set_difference(x, y)
 
 ## -----------------------------------------------------------------------------
 starts <- as.Date(c("2019-01-05", "2019-01-20", "2019-01-25", "2019-02-01"))
@@ -318,17 +314,17 @@ x
 y
 
 ## -----------------------------------------------------------------------------
-iv_intersect(x, y)
+iv_set_intersect(x, y)
 
 ## -----------------------------------------------------------------------------
 locations <- iv_locate_overlaps(x, y, no_match = "drop")
 overlaps <- iv_align(x, y, locations = locations)
 
 overlaps %>%
-  mutate(intersect = iv_pairwise_intersect(needles, haystack))
+  mutate(intersect = iv_pairwise_set_intersect(needles, haystack))
 
 ## ---- error=TRUE--------------------------------------------------------------
-iv_pairwise_intersect(iv(1, 5), iv(6, 9))
+iv_pairwise_set_intersect(iv(1, 5), iv(6, 9))
 
 ## -----------------------------------------------------------------------------
 x <- iv_pairs(c(1, 5), c(3, NA), c(NA, 3))
@@ -339,14 +335,14 @@ y <- iv_pairs(c(NA, NA), c(0, 2))
 y
 
 ## -----------------------------------------------------------------------------
-# Set-like operations treat missing intervals as overlapping
+# Match-like operations treat missing intervals as overlapping
 iv_locate_overlaps(x, y)
 
-iv_intersect(x, y)
+iv_set_intersect(x, y)
 
 ## -----------------------------------------------------------------------------
 # Pairwise operations treat missing intervals as infectious
 z <- iv_pairs(c(1, 2), c(1, 4))
 
-iv_pairwise_intersect(y, z)
+iv_pairwise_set_intersect(y, z)
 

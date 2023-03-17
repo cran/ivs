@@ -1,0 +1,69 @@
+---
+title: "Stack Overflow Examples"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Stack Overflow Examples}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette collects links to a number of Stack Overflow questions that use ivs to answer them. They are roughly grouped by the function used to solve the question.
+
+#### iv_groups()
+
+- [Flatten / Merge overlapping time periods by group](https://stackoverflow.com/questions/28938147/how-to-flatten-merge-overlapping-time-periods/71754454#71754454)
+
+- [Merge millisecond date-time periods](https://stackoverflow.com/questions/60322604/merge-overlapping-time-periods-with-milliseconds-in-r/71754233#71754233)
+
+- [Merge overlapping date-time intervals by group](https://stackoverflow.com/questions/53213418/collapse-and-merge-overlapping-time-intervals/71753991#71753991)
+
+- [Group hospital patient stay dates](https://stackoverflow.com/questions/72188780/grouping-dates-in-r-to-create-patient-episodes/72189705#72189705)
+
+- [Merge overlaps within groups](https://stackoverflow.com/questions/56190415/group-by-if-overlap/73636229#73636229)
+
+- [Detect self-overlaps within groups](https://stackoverflow.com/questions/34951356/r-find-overlap-among-time-periods/73639374#73639374)
+
+#### iv_identify_group()
+
+- [Identify overlapping date ranges](https://stackoverflow.com/questions/57208770/identify-overlapping-date-ranges-by-id-r/71753203#71753203)
+
+- [Determine if a date interval overlaps other date intervals](https://stackoverflow.com/questions/58283935/r-determine-if-each-date-interval-overlaps-with-all-other-date-intervals-in-a-d/71753341#71753341)
+
+- [Identify active maintanence types](https://stackoverflow.com/questions/72062736/generate-new-variable-based-on-start-and-stop-date-in-dplyr/72063499#72063499)
+
+#### iv_identify_splits()
+
+- [Find overlaps and create new rows for each overlap](https://stackoverflow.com/questions/46151452/find-overlapping-dates-for-each-id-and-create-a-new-row-for-the-overlap/71753687#71753687)
+
+#### iv_count_between()
+
+- [Aggregate rolling enrollment by month](https://stackoverflow.com/questions/71621389/use-dplyr-to-aggregate-counts-by-month-from-start-stop-ranged-variables/71752959#71752959)
+
+- [Another aggregate rolling enrollment by month](https://stackoverflow.com/questions/73561876/finding-how-many-records-are-open-in-a-month-in-a-dataset-containing-single-rec/73575090#73575090)
+
+#### iv_count_overlaps()
+
+- [Detect self-overlaps](https://stackoverflow.com/questions/40129485/overlap-ranges-in-single-dataframe/73636659#73636659)
+
+#### iv_count_includes()
+
+- [Track rolling monthly disease prevalence](https://stackoverflow.com/questions/75221096/how-to-aggregate-data-by-month-using-study-start-and-end-dates-in-r-to-calculate/75222987#75222987)
+
+#### iv_set_complement()
+
+- [Find ranges of dates where an apartment is empty](https://stackoverflow.com/questions/72536566/adding-rows-for-missing-intervals-between-existing-intervals-in-r/72547866#72547866)
+
+#### iv_locate_overlaps()
+
+- [Locate self overlaps and compute a proportion within those overlaps](https://stackoverflow.com/questions/72987129/count-instances-of-value-within-overlapping-dates/73039209#73039209)
+
+#### iv_overlaps()
+
+- [Detecting if there are any overlaps between two sets of ranges](https://stackoverflow.com/questions/26905601/comparing-and-finding-overlap-range-in-r/73639244#73639244)

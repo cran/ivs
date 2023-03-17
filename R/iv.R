@@ -1,4 +1,7 @@
-iv_classes <- c("iv", "vctrs_rcrd", "vctrs_vctr")
+# Hardcoding the class isn't best practice. We are only doing this until
+# `vctrs::new_vctr()` and potentially `vctrs::new_rcrd()` get rewritten in C.
+# https://github.com/r-lib/vctrs/pull/1498
+iv_classes <- c("ivs_iv", "vctrs_rcrd", "vctrs_vctr")
 
 #' Construct a new iv
 #'
@@ -166,6 +169,16 @@ iv <- function(start, end, ..., ptype = NULL, size = NULL) {
   start <- args$start
   end <- args$end
 
+  joint <- data_frame(start = start, end = end)
+  complete <- vec_detect_complete(joint)
+
+  if (!all(complete)) {
+    incomplete <- !complete
+    na <- vec_init(start)
+    start <- vec_assign(start, incomplete, na)
+    end <- vec_assign(end, incomplete, na)
+  }
+
   compare <- vec_compare(start, end)
   greater_or_equal <- compare != -1L
 
@@ -179,16 +192,6 @@ iv <- function(start, end, ..., ptype = NULL, size = NULL) {
       )
     )
     abort(message)
-  }
-
-  joint <- data_frame(start = start, end = end)
-  complete <- vec_detect_complete(joint)
-
-  if (!all(complete)) {
-    incomplete <- !complete
-    na <- vec_init(start)
-    start <- vec_assign(start, incomplete, na)
-    end <- vec_assign(end, incomplete, na)
   }
 
   new_iv(start, end)
@@ -220,8 +223,8 @@ iv_pairs <- function(..., ptype = NULL) {
   start <- map(args, vec_slice, i = 1L)
   end <- map(args, vec_slice, i = 2L)
 
-  start <- vec_c(!!!start)
-  end <- vec_c(!!!end)
+  start <- vec_c(!!!start, .error_call = current_env())
+  end <- vec_c(!!!end, .error_call = current_env())
 
   iv(start, end, ptype = ptype)
 }
@@ -243,13 +246,40 @@ iv_pairs <- function(..., ptype = NULL) {
 #' is_iv(1)
 #' is_iv(new_iv(1, 2))
 is_iv <- function(x) {
-  inherits(x, "iv")
+  inherits(x, "ivs_iv")
+}
+
+check_iv <- function(x, ..., arg = caller_arg(x), call = caller_env()) {
+  if (!missing(x) && is_iv(x)) {
+    return(invisible(NULL))
+  }
+
+  stop_input_type(
+    x = x,
+    what = "an <iv>",
+    arg = arg,
+    call = call
+  )
 }
 
 # ------------------------------------------------------------------------------
 
 #' @export
-vec_ptype2.iv.iv <- function(x, y, ...) {
+vec_ptype.ivs_iv <- function(x, ...) {
+  start <- unclass(x)[[1L]]
+  ptype <- vec_ptype(start, ...)
+  new_bare_iv(ptype, ptype)
+}
+
+#' @export
+vec_ptype_finalise.ivs_iv <- function(x, ...) {
+  start <- unclass(x)[[1L]]
+  ptype <- vec_ptype_finalise(start, ...)
+  new_bare_iv(ptype, ptype)
+}
+
+#' @export
+vec_ptype2.ivs_iv.ivs_iv <- function(x, y, ...) {
   # If they are ivs, we can assume the structure is correct.
   # Going for absolute performance here.
   x <- unclass(x)[[1L]]
@@ -261,7 +291,7 @@ vec_ptype2.iv.iv <- function(x, y, ...) {
 }
 
 #' @export
-vec_cast.iv.iv <- function(x, to, ...) {
+vec_cast.ivs_iv.ivs_iv <- function(x, to, ...) {
   # If they are ivs, we can assume the structure is correct.
   # Going for absolute performance here.
   to <- unclass(to)[[1L]]
@@ -277,7 +307,7 @@ vec_cast.iv.iv <- function(x, to, ...) {
 }
 
 #' @export
-vec_restore.iv <- function(x, to, ...) {
+vec_restore.ivs_iv <- function(x, to, ...) {
   new_bare_iv_from_fields(x)
 }
 
@@ -307,10 +337,18 @@ vec_restore.iv <- function(x, to, ...) {
 #' You typically _do_ need an `iv_restore()` method for custom iv extensions.
 #' If your class is simple, then you can generally just call your constructor,
 #' like `new_my_iv()`, to restore the class and any additional attributes that
-#' might be required.
+#' might be required. If your class doesn't use [new_iv()], then an
+#' `iv_restore()` method is mandatory, as this is one of the ways that ivs
+#' detects that your class is compatible with ivs.
 #'
 #' This system allows you to use any `iv_*()` function on your iv extension
 #' object without having to define S3 methods for all of them.
+#'
+#' Note that the default method for `iv_proxy()` returns its input unchanged,
+#' even if it isn't an iv. Each `iv_*()` function does separate checking to
+#' ensure that the proxy is a valid iv, or implements an alternate behavior if
+#' no proxy method is implemented. In contrast, `iv_restore()` will error if a
+#' method for `to` isn't registered.
 #'
 #' @inheritParams rlang::args_dots_empty
 #'
@@ -366,7 +404,7 @@ vec_restore.iv <- function(x, to, ...) {
 #'
 #' # Proxies, computes the complement to generate an iv,
 #' # then restores to the original type
-#' iv_complement(x)
+#' iv_set_complement(x)
 #'
 #' }
 NULL
@@ -380,12 +418,6 @@ iv_proxy <- function(x, ...) {
 
 #' @export
 iv_proxy.default <- function(x, ...) {
-  class <- class(x)[[1L]]
-  abort(glue("Object `x`, with type <{class}>, is not an <iv> and does not implement an `iv_proxy()` method."))
-}
-
-#' @export
-iv_proxy.iv <- function(x, ...) {
   x
 }
 
@@ -404,23 +436,33 @@ iv_restore.default <- function(x, to, ...) {
 }
 
 #' @export
-iv_restore.iv <- function(x, to, ...) {
+iv_restore.ivs_iv <- function(x, to, ...) {
   x
+}
+
+is_iv_extension <- function(x) {
+  # If an `iv_restore()` method exists, then we assume that the object is
+  # an iv extension that has a proxy that returns an iv. This is useful when
+  # we aren't sure if the object is "iv-like" or not, like in the `missing`
+  # and `empty` arguments of `iv_span()`.
+  obj_s3_method_exists(x, "iv_restore")
 }
 
 # ------------------------------------------------------------------------------
 
 #' @export
-vec_ptype_abbr.iv <- function(x, ...) {
+vec_ptype_abbr.ivs_iv <- function(x, ...) {
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
   start <- field_start(proxy)
   inner <- vec_ptype_abbr(start)
   vec_paste0("iv<", inner, ">")
 }
 
 #' @export
-vec_ptype_full.iv <- function(x, ...) {
+vec_ptype_full.ivs_iv <- function(x, ...) {
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
   start <- field_start(proxy)
   inner <- vec_ptype_full(start)
   vec_paste0("iv<", inner, ">")
@@ -454,6 +496,7 @@ NULL
 #' @export
 iv_start <- function(x) {
   x <- iv_proxy(x)
+  check_iv(x)
   field_start(x)
 }
 
@@ -461,6 +504,7 @@ iv_start <- function(x) {
 #' @export
 iv_end <- function(x) {
   x <- iv_proxy(x)
+  check_iv(x)
   field_end(x)
 }
 

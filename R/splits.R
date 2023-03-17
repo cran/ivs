@@ -89,8 +89,7 @@
 #'
 #' # Tabulate who was there at any given time
 #' guests %>%
-#'   group_by(splits) %>%
-#'   summarise(n = n(), who = list(name))
+#'   summarise(n = n(), who = list(name), .by = splits)
 #'
 #' # ---------------------------------------------------------------------------
 #'
@@ -107,6 +106,7 @@ iv_splits <- function(x, ..., on = NULL) {
   check_dots_empty0(...)
 
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
 
   start <- field_start(proxy)
   end <- field_end(proxy)
@@ -125,12 +125,12 @@ iv_splits <- function(x, ..., on = NULL) {
     condition = c("<", ">"),
     no_match = "drop",
     multiple = "any",
-    incomplete = "match"
+    incomplete = "match",
+    error_call = current_env()
   )
 
   out <- vec_slice(needles, loc$needles)
-
-  out <- new_iv(out$start, out$end)
+  out <- new_bare_iv_from_fields(out)
   out <- iv_restore(out, x)
 
   out
@@ -142,6 +142,7 @@ iv_identify_splits <- function(x, ..., on = NULL) {
   check_dots_empty0(...)
 
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
 
   start <- field_start(proxy)
   end <- field_end(proxy)
@@ -158,15 +159,21 @@ iv_identify_splits <- function(x, ..., on = NULL) {
     haystack,
     condition = c("<", ">"),
     no_match = "error",
-    incomplete = NA_integer_
+    incomplete = NA_integer_,
+    error_call = current_env()
   )
-  loc <- vec_split(loc$haystack, loc$needles)
 
-  candidates <- new_iv(candidate_start, candidate_end)
+  sizes <- vec_run_sizes(loc$needles)
+  loc <- vec_chop(loc$haystack, sizes = sizes)
+
+  ptype <- vec_ptype(x)
+  ptype <- vec_ptype_finalise(ptype)
+
+  candidates <- new_bare_iv(candidate_start, candidate_end)
   candidates <- iv_restore(candidates, x)
 
-  out <- vec_chop(candidates, loc$val)
-  out <- new_list_of(out, ptype = vec_ptype(candidates))
+  out <- vec_chop(candidates, indices = loc)
+  out <- new_list_of(out, ptype = ptype)
 
   out
 }
@@ -177,6 +184,7 @@ iv_locate_splits <- function(x, ..., on = NULL) {
   check_dots_empty0(...)
 
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
 
   start <- field_start(proxy)
   end <- field_end(proxy)
@@ -194,25 +202,34 @@ iv_locate_splits <- function(x, ..., on = NULL) {
     haystack,
     condition = c("<", ">"),
     no_match = "drop",
-    incomplete = "match"
+    incomplete = "match",
+    error_call = current_env()
   )
-  loc <- vec_split(loc$haystack, loc$needles)
 
-  key <- vec_slice(needles, loc$key)
-  key <- new_iv(key$start, key$end)
+  sizes <- vec_run_sizes(loc$needles)
+
+  starts <- vec_run_sizes_to_starts(sizes)
+  starts <- vec_slice(loc$needles, starts)
+
+  loc <- vec_chop(loc$haystack, sizes = sizes)
+
+  key <- vec_slice(needles, starts)
+  key <- new_bare_iv_from_fields(key)
   key <- iv_restore(key, x)
-
-  loc <- loc$val
 
   out <- data_frame(key = key, loc = loc)
 
   out
 }
 
-iv_split_candidates <- function(start, end, ..., on = NULL, call = caller_env()) {
+iv_split_candidates <- function(start,
+                                end,
+                                ...,
+                                on = NULL,
+                                error_call = caller_env()) {
   check_dots_empty0(...)
 
-  on <- vec_cast(on, start, x_arg = "on", to_arg = "iv_start(x)", call = call)
+  on <- vec_cast(on, start, x_arg = "on", to_arg = "iv_start(x)", call = error_call)
 
   # Candidates are built from all sorted unique values
   points <- vec_sort(vec_unique(vec_c(start, end, on)))
@@ -225,7 +242,7 @@ iv_split_candidates <- function(start, end, ..., on = NULL, call = caller_env())
   # 1 unique point (an `NA`), but we still want to keep `[NA, NA)` as an
   # interval candidate so we remove it now and add it back at the end.
   last <- vec_slice(points, size_points)
-  any_missing <- any(vec_equal_na(last))
+  any_missing <- any(vec_detect_missing(last))
   if (any_missing) {
     points <- vec_slice(points, -size_points)
     size_points <- size_points - 1L

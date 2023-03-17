@@ -112,6 +112,7 @@ iv_groups <- function(x, ..., abutting = TRUE) {
   check_dots_empty0(...)
 
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
 
   start <- field_start(proxy)
   end <- field_end(proxy)
@@ -137,6 +138,7 @@ iv_identify_group <- function(x, ..., abutting = TRUE) {
   check_dots_empty0(...)
 
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
 
   start <- field_start(proxy)
   end <- field_end(proxy)
@@ -149,17 +151,17 @@ iv_identify_group <- function(x, ..., abutting = TRUE) {
 
   times <- list_sizes(groups$loc)
 
-  loc <- vec_unchop(groups$loc, ptype = integer(), name_spec = zap())
+  loc <- list_unchop(groups$loc, ptype = integer(), name_spec = zap())
   loc <- vec_order(loc)
 
-  start <- groups$key$start
-  end <- groups$key$end
+  key <- groups$key
+  key <- vec_rep_each(key, times = times)
+  key <- vec_slice(key, loc)
+
+  start <- key$start
+  end <- key$end
 
   out <- new_iv(start, end)
-
-  out <- vec_rep_each(out, times = times)
-  out <- vec_slice(out, loc)
-
   out <- iv_restore(out, x)
 
   out
@@ -171,6 +173,7 @@ iv_locate_groups <- function(x, ..., abutting = TRUE) {
   check_dots_empty0(...)
 
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
 
   start <- field_start(proxy)
   end <- field_end(proxy)

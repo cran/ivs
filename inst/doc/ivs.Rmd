@@ -92,7 +92,7 @@ If you wanted to represent this interval with second precision with a right-open
 This nicely captures the exclusive "end" of the interval as the start of the next day.
 This also means it exactly aligns with the start of the *next* day's interval, `[2019-01-03 00:00:00, 2019-01-04 00:00:00)`.
 
-If you wanted to represent this with a closed interval, you might do `[2019-01-02 00:00:00, 2019-01-02 23:59:59)`.
+If you wanted to represent this with a closed interval, you might do `[2019-01-02 00:00:00, 2019-01-02 23:59:59]`.
 Not only is this a bit awkward, it can also cause issues if the precision changes!
 Say you wanted to up the precision on this interval from second level precision to millisecond precision.
 The right-open interval wouldn't have to change at all since the end of that interval is set to `2019-01-03 00:00:00` and anything before that is fair game.
@@ -359,9 +359,9 @@ If you don't want this, use the `abutting` argument.
 iv_groups(x, abutting = FALSE)
 ```
 
-### With `group_by()`
+### With `.by`
 
-Grouping overlapping intervals is often a useful way to create a new variable to group on with `dplyr::group_by()`.
+Grouping overlapping intervals is often a useful way to create a new variable to group on with dplyr's `.by` argument.
 For example, consider the following problem where you have multiple users racking up costs across multiple systems.
 The date ranges represent the range when the corresponding cost was accrued over, and the ranges don't overlap for a given `(user, system)` pair.
 
@@ -391,8 +391,7 @@ Now let's say you don't care about the `system` anymore, and instead want to sum
 
 ```{r}
 costs %>%
-  group_by(user) %>%
-  summarise(range = iv_groups(range), .groups = "drop")
+  reframe(range = iv_groups(range), .by = user)
 ```
 
 But how can we sum up the costs?
@@ -401,16 +400,14 @@ This will give us something to group on so we can sum up the costs.
 
 ```{r}
 costs2 <- costs %>%
-  group_by(user) %>%
-  mutate(range = iv_identify_group(range))
+  mutate(range = iv_identify_group(range), .by = user)
 
 # `range` has been updated with the corresponding group
 costs2
 
 # So now we can group on that to summarise the cost
 costs2 %>%
-  group_by(range, .add = TRUE) %>%
-  summarise(cost = sum(cost), .groups = "drop")
+  summarise(cost = sum(cost), .by = c(user, range))
 ```
 
 ### Minimal ivs
@@ -448,9 +445,9 @@ If we looked at the sorted unique values of the endpoints (i.e. `c(9, 10, 11, 12
 iv_splits(x)
 ```
 
-### With `group_by()`
+### With `.by`
 
-Splitting an iv into its disjoint pieces is another operation that works nicely with `group_by()`.
+Splitting an iv into its disjoint pieces is another operation that works nicely with `.by`.
 Consider this data set containing details about a number of guests that arrived to your party.
 You've been meticulous, so you've got their arrival and departure times logged (don't ask me why, maybe it's for COVID-19 Contact Tracing purposes).
 
@@ -513,8 +510,7 @@ Now that we have the splits for each guest, we can group by `iv` and summarize t
 
 ```{r}
 guests2 %>%
-  group_by(iv) %>%
-  summarise(n = n(), who = list(name), .groups = "drop")
+  summarise(n = n(), who = list(name), .by = iv)
 ```
 
 ## Set operations
@@ -522,36 +518,36 @@ guests2 %>%
 There are a number of set theoretical operations that you can use on ivs.
 These are:
 
--   `iv_complement()`
+-   `iv_set_complement()`
 
--   `iv_union()`
+-   `iv_set_union()`
 
--   `iv_intersect()`
+-   `iv_set_intersect()`
 
--   `iv_difference()`
+-   `iv_set_difference()`
 
--   `iv_symmetric_difference()`
+-   `iv_set_symmetric_difference()`
 
-`iv_complement()` works on a single iv, while all the others work on two intervals at a time.
+`iv_set_complement()` works on a single iv, while all the others work on two intervals at a time.
 All of these functions return a *minimal* interval vector.
 The easiest way to think about these functions is to imagine `iv_groups()` being called on each of the inputs first (to reduce them down to their minimal form) before applying the operation.
 
-`iv_complement()` computes the set complement of the intervals in a single iv.
+`iv_set_complement()` computes the set complement of the intervals in a single iv.
 
 ```{r}
 x <- iv_pairs(c(1, 3), c(2, 5), c(10, 12), c(13, 15))
 x
 
-iv_complement(x)
+iv_set_complement(x)
 ```
 
-By default, `iv_complement()` uses the smallest/largest values of its input as the bounds to compute the complement over, but you can supply bounds explicitly with `lower` and `upper`:
+By default, `iv_set_complement()` uses the smallest/largest values of its input as the bounds to compute the complement over, but you can supply bounds explicitly with `lower` and `upper`:
 
 ```{r}
-iv_complement(x, lower = 0, upper = Inf)
+iv_set_complement(x, lower = 0, upper = Inf)
 ```
 
-`iv_union()` takes the union of two ivs.
+`iv_set_union()` takes the union of two ivs.
 It is essentially a call to `vctrs::vec_c()` followed by `iv_groups()`.
 It answers the question, "Which intervals are in `x` or `y`?"
 
@@ -561,21 +557,21 @@ y <- iv_pairs(c(-5, 0), c(1, 4), c(8, 10), c(15, 16))
 x
 y
 
-iv_union(x, y)
+iv_set_union(x, y)
 ```
 
-`iv_intersect()` takes the intersection of two ivs.
+`iv_set_intersect()` takes the intersection of two ivs.
 It answers the question, "Which intervals are in `x` and `y`?"
 
 ```{r}
-iv_intersect(x, y)
+iv_set_intersect(x, y)
 ```
 
-`iv_difference()` takes the asymmetrical difference of two ivs.
+`iv_set_difference()` takes the asymmetrical difference of two ivs.
 It answers the question, "Which intervals are in `x` but not `y`?"
 
 ```{r}
-iv_difference(x, y)
+iv_set_difference(x, y)
 ```
 
 ## Pairwise set operations
@@ -583,7 +579,7 @@ iv_difference(x, y)
 The set operations described above all treat `x` and `y` as two complete "sets" of intervals and operate on the intervals as a group.
 Occasionally it is useful to have pairwise equivalents of these operations that, say, take the intersection of the i-th interval of `x` and the i-th interval of `y`.
 
-One case in particular comes from combining `iv_locate_overlaps()` with `iv_pairwise_intersect()`.
+One case in particular comes from combining `iv_locate_overlaps()` with `iv_pairwise_set_intersect()`.
 Here you might want to know not only *where* two ivs overlaps, but also *what* that intersection was for each value in `x`.
 
 ```{r}
@@ -599,10 +595,10 @@ x
 y
 ```
 
-`iv_intersect()` isn't very useful to answer this particular question, because it first merges all overlapping intervals in each input.
+`iv_set_intersect()` isn't very useful to answer this particular question, because it first merges all overlapping intervals in each input.
 
 ```{r}
-iv_intersect(x, y)
+iv_set_intersect(x, y)
 ```
 
 Instead, we can find the overlaps and align them, and then pairwise intersect the results:
@@ -612,17 +608,17 @@ locations <- iv_locate_overlaps(x, y, no_match = "drop")
 overlaps <- iv_align(x, y, locations = locations)
 
 overlaps %>%
-  mutate(intersect = iv_pairwise_intersect(needles, haystack))
+  mutate(intersect = iv_pairwise_set_intersect(needles, haystack))
 ```
 
 Note that the pairwise set operations come with a number of restrictions that limit their usage in many cases.
-For example, `iv_pairwise_intersect()` requires that `x[i]` and `y[i]` overlap, otherwise they would result in an empty interval, which isn't allowed.
+For example, `iv_pairwise_set_intersect()` requires that `x[i]` and `y[i]` overlap, otherwise they would result in an empty interval, which isn't allowed.
 
 ```{r, error=TRUE}
-iv_pairwise_intersect(iv(1, 5), iv(6, 9))
+iv_pairwise_set_intersect(iv(1, 5), iv(6, 9))
 ```
 
-See the documentation page of `iv_pairwise_intersect()` for a complete list of restrictions for all of the pairwise set operations.
+See the documentation page of `iv_pairwise_set_intersect()` for a complete list of restrictions for all of the pairwise set operations.
 
 ## Missing intervals
 
@@ -635,8 +631,8 @@ x
 
 The defaults of all functions in ivs treat missing intervals in one of two ways:
 
--   Set-like operations treat missing intervals as *overlapping* other missing intervals, but they won't overlap any other interval.
-    These include `iv_locate_overlaps()`, `iv_intersect()`, and `iv_splits()`.
+-   Match-like operations treat missing intervals as *overlapping* other missing intervals, but they won't overlap any other interval.
+    These include `iv_locate_overlaps()`, `iv_set_intersect()`, and `iv_splits()`.
 
 -   Pairwise operations treat missing intervals as *infectious*, meaning that if the i-th interval of `x` is missing and the i-th interval of `y` is not missing (or vice versa), then the result is forced to be a missing interval.
     These include any operations prefixed with `iv_pairwise_*()`.
@@ -647,15 +643,15 @@ y
 ```
 
 ```{r}
-# Set-like operations treat missing intervals as overlapping
+# Match-like operations treat missing intervals as overlapping
 iv_locate_overlaps(x, y)
 
-iv_intersect(x, y)
+iv_set_intersect(x, y)
 ```
 
 ```{r}
 # Pairwise operations treat missing intervals as infectious
 z <- iv_pairs(c(1, 2), c(1, 4))
 
-iv_pairwise_intersect(y, z)
+iv_pairwise_set_intersect(y, z)
 ```

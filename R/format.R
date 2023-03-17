@@ -67,7 +67,7 @@ iv_format.data.frame <- function(x) {
 
   out <- vec_paste0(abbr, "[", vec_seq_along(x), ",]")
 
-  missing <- vec_equal_na(x)
+  missing <- vec_detect_missing(x)
   if (any(missing)) {
     out[missing] <- "NA"
   }
@@ -100,8 +100,9 @@ iv_format.integer64 <- function(x) {
 # ------------------------------------------------------------------------------
 
 #' @export
-format.iv <- function(x, ...) {
+format.ivs_iv <- function(x, ...) {
   proxy <- iv_proxy(x)
+  check_iv(proxy, arg = "x")
 
   start <- field_start(proxy)
   end <- field_end(proxy)

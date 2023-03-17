@@ -3,7 +3,7 @@
 
 test_that("can create a new iv", {
   x <- new_iv(1, 2)
-  expect_s3_class(x, "iv")
+  expect_s3_class(x, "ivs_iv")
 })
 
 test_that("can attach attributes", {
@@ -13,7 +13,7 @@ test_that("can attach attributes", {
 
 test_that("can subclass an iv", {
   x <- new_iv(1, 2, class = "subclass")
-  expect_identical(class(x)[1:2], c("subclass", "iv"))
+  expect_identical(class(x)[1:2], c("subclass", "ivs_iv"))
 })
 
 # ------------------------------------------------------------------------------
@@ -23,18 +23,21 @@ test_that("can generate an iv", {
   expect_identical(iv(1, 2), new_iv(1, 2))
 })
 
-test_that("incomplete values are propagated", {
+test_that("incomplete values are propagated (#36)", {
   expect_identical(iv(NA, TRUE), iv(NA, NA))
   expect_identical(iv(TRUE, NA), iv(NA, NA))
 
   # Propagates incompleteness, not missingness!
-  # Seen as incomplete even though start is "less" than end
   x <- data_frame(x = 1, y = NA)
   y <- data_frame(x = 2, y = 1)
-
   expect <- data_frame(x = NA_real_, y = NA_real_)
 
+  # Seen as incomplete even though start is "less" than end
   expect_identical(iv(x, y), iv(expect, expect))
+
+  # Seen as incomplete even though start is "greater" than end (#36)
+  # No error here, incompleteness is handled first
+  expect_identical(iv(y, x), iv(expect, expect))
 })
 
 test_that("can force a ptype", {
@@ -95,12 +98,103 @@ test_that("can check if an object is an iv", {
 })
 
 # ------------------------------------------------------------------------------
+# check_iv()
+
+test_that("can check if an object is an iv and error if not", {
+  my_check <- function(x) {
+    check_iv(x)
+  }
+
+  expect_snapshot(error = TRUE, {
+    check_iv(1)
+  })
+  expect_snapshot(error = TRUE, {
+    my_check()
+  })
+  expect_snapshot(error = TRUE, {
+    my_check(1)
+  })
+})
+
+# ------------------------------------------------------------------------------
+# vec_ptype()
+
+test_that("ptype is computed correctly with simple vectors (#27)", {
+  expect_identical(
+    vec_ptype(iv(1:5, 2:6)),
+    iv(integer(), integer())
+  )
+})
+
+test_that("ptype is computed correctly with data frame components", {
+  start <- data_frame(a = 1, b = "x")
+  end <- data_frame(a = 3, b = "a")
+  x <- iv(start, end)
+
+  expect <- data_frame(a = double(), b = character())
+  expect <- iv(expect, expect)
+
+  expect_identical(vec_ptype(x), expect)
+})
+
+test_that("ptype returns unspecified on fully `NA` unspecified vectors", {
+  # Must be unspecified so `vec_ptype2()` can combine ivs with unspecified
+  # `start/end` with any other iv.
+  x <- iv(NA, NA)
+  ptype <- new_iv(unspecified(), unspecified())
+  expect_identical(vec_ptype(x), ptype)
+
+  # Not finalized recursively either
+  x <- data_frame(x = NA, y = NA)
+  x <- iv(x, x)
+  ptype <- data_frame(x = unspecified(), y = unspecified())
+  ptype <- new_iv(ptype, ptype)
+  expect_identical(vec_ptype(x), ptype)
+})
+
+test_that("ptype is finalised through `vec_ptype_finalise()`", {
+  x <- iv(NA, NA)
+
+  ptype <- vec_ptype(x)
+  expect <- new_iv(unspecified(), unspecified())
+  expect_identical(ptype, expect)
+
+  ptype <- vec_ptype_finalise(ptype)
+  expect <- new_iv(logical(), logical())
+  expect_identical(ptype, expect)
+
+  # Finalized recursively
+  x <- data_frame(x = NA, y = NA)
+  x <- iv(x, x)
+
+  ptype <- vec_ptype(x)
+  expect <- data_frame(x = unspecified(), y = unspecified())
+  expect <- new_iv(expect, expect)
+  expect_identical(ptype, expect)
+
+  ptype <- vec_ptype_finalise(ptype)
+  expect <- data_frame(x = logical(), y = logical())
+  expect <- new_iv(expect, expect)
+  expect_identical(ptype, expect)
+})
+
+# ------------------------------------------------------------------------------
 # vec_ptype2()
 
 test_that("ptype2 is computed right", {
   expect_identical(
     vec_ptype2(iv(1, 2), iv(1L, 2L)),
     iv(double(), double())
+  )
+})
+
+test_that("ptype2 with unspecified start/end uses type of finalised input (#33)", {
+  x <- iv(NA, NA)
+  y <- iv("x", "y")
+
+  expect_identical(
+    vec_ptype2(x, y),
+    iv(character(), character())
   )
 })
 
@@ -120,6 +214,36 @@ test_that("cast is computed right", {
 
 test_that("cast errors as needed", {
   expect_snapshot(error = TRUE, vec_cast(iv("x", "y"), iv(1L, 2L)))
+})
+
+# ------------------------------------------------------------------------------
+# vec_proxy() / vec_restore()
+
+test_that("can concatenate ivs with recursive proxying/restoration (r-lib/vctrs#1648)", {
+  start <- new_rcrd(list(year = 2019, month = 1))
+  end <- new_rcrd(list(year = 2019, month = 2))
+
+  x <- iv(start, end)
+  expect <- iv(vec_c(start, start), vec_c(end, end))
+  expect_identical(vec_c(x, x), expect)
+
+  df <- data_frame(x = data_frame(y = x))
+  expect <- data_frame(x = data_frame(y = expect))
+  expect_identical(vec_c(df, df), expect)
+  expect_identical(vec_rbind(df, df), expect)
+
+  # With deeply recursive proxying/restoration
+  start <- data_frame(x = start)
+  end <- data_frame(x = end)
+
+  x <- iv(start, end)
+  expect <- iv(vec_c(start, start), vec_c(end, end))
+  expect_identical(vec_c(x, x), expect)
+
+  df <- data_frame(x = data_frame(y = x))
+  expect <- data_frame(x = data_frame(y = expect))
+  expect_identical(vec_c(df, df), expect)
+  expect_identical(vec_rbind(df, df), expect)
 })
 
 # ------------------------------------------------------------------------------
@@ -159,9 +283,9 @@ test_that("can `vec_equal()`", {
   expect_identical(vec_equal(na, na, na_equal = TRUE), TRUE)
 })
 
-test_that("can `vec_equal_na()`", {
+test_that("can `vec_detect_missing()`", {
   x <- iv_pairs(c(1, 2), c(NA, NA))
-  expect_identical(vec_equal_na(x), c(FALSE, TRUE))
+  expect_identical(vec_detect_missing(x), c(FALSE, TRUE))
 })
 
 # ------------------------------------------------------------------------------
@@ -264,8 +388,8 @@ test_that("proxy of a subclass works", {
   expect_identical(iv_proxy(x), iv)
 })
 
-test_that("default proxy error works", {
-  expect_snapshot(error = TRUE, iv_proxy(1))
+test_that("default proxy returns input", {
+  expect_identical(iv_proxy(1), 1)
 })
 
 # ------------------------------------------------------------------------------

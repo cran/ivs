@@ -5,7 +5,7 @@
     Condition
       Error in `iv()`:
       ! `start` must be less than `end`.
-      i `start` is not less than `end` at locations: `c(1)`.
+      i `start` is not less than `end` at locations: `1`.
 
 ---
 
@@ -14,7 +14,7 @@
     Condition
       Error in `iv()`:
       ! `start` must be less than `end`.
-      i `start` is not less than `end` at locations: `c(1)`.
+      i `start` is not less than `end` at locations: `1`.
 
 ---
 
@@ -79,8 +79,32 @@
     Code
       iv_pairs(c("a", "b"), c(1, 2))
     Condition
-      Error:
+      Error in `iv_pairs()`:
       ! Can't combine `..1` <character> and `..2` <double>.
+
+# can check if an object is an iv and error if not
+
+    Code
+      check_iv(1)
+    Condition
+      Error:
+      ! `1` must be an <iv>, not the number 1.
+
+---
+
+    Code
+      my_check()
+    Condition
+      Error in `my_check()`:
+      ! `x` must be an <iv>, not absent.
+
+---
+
+    Code
+      my_check(1)
+    Condition
+      Error in `my_check()`:
+      ! `x` must be an <iv>, not the number 1.
 
 # ptype2 errors as needed
 
@@ -125,14 +149,6 @@
       vec_ptype_full(iv(data_frame(x = 1, y = 2), data_frame(x = 2, y = 3)))
     Output
       [1] "iv<data.frame<\n  x: double\n  y: double\n>>"
-
-# default proxy error works
-
-    Code
-      iv_proxy(1)
-    Condition
-      Error in `iv_proxy()`:
-      ! Object `x`, with type <numeric>, is not an <iv> and does not implement an `iv_proxy()` method.
 
 # default restore error works
 

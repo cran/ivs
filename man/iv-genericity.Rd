@@ -51,10 +51,18 @@ vector respectively, then you probably need an \code{iv_proxy()} method.
 You typically \emph{do} need an \code{iv_restore()} method for custom iv extensions.
 If your class is simple, then you can generally just call your constructor,
 like \code{new_my_iv()}, to restore the class and any additional attributes that
-might be required.
+might be required. If your class doesn't use \code{\link[=new_iv]{new_iv()}}, then an
+\code{iv_restore()} method is mandatory, as this is one of the ways that ivs
+detects that your class is compatible with ivs.
 
 This system allows you to use any \verb{iv_*()} function on your iv extension
 object without having to define S3 methods for all of them.
+
+Note that the default method for \code{iv_proxy()} returns its input unchanged,
+even if it isn't an iv. Each \verb{iv_*()} function does separate checking to
+ensure that the proxy is a valid iv, or implements an alternate behavior if
+no proxy method is implemented. In contrast, \code{iv_restore()} will error if a
+method for \code{to} isn't registered.
 }
 \examples{
 if (FALSE) {
@@ -92,7 +100,7 @@ iv_start(x)
 
 # Proxies, computes the complement to generate an iv,
 # then restores to the original type
-iv_complement(x)
+iv_set_complement(x)
 
 }
 }
